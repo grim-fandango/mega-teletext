@@ -1,0 +1,264 @@
+!to "teletext.o", cbm
+
+SCNKEY 	= $ff9f
+GETIN 	= $ff34
+SCRNPTR = $0800
+COLPTR	= $d800
+
+* = $1600
+
+start:      	
+				// Lower case mode
+				lda #39
+				sta 53272
+
+				// Enable VIC-IV mode
+				sei
+				ldx #$47
+				ldy #$53
+				stx $d02f
+				sty $d02f
+				
+
+				// clear H640 - sets screen to 40 column mode
+				lda $d031
+				and #$7f
+				sta $d031
+
+				//set bit 5 
+				//ora #$10
+				//sta $d031
+
+				// enable 2K colour RAM
+				lda $d030
+				ora #$01
+				sta $d030	
+
+				
+				// Move screen RAM
+				lda #<SCRNPTR
+				sta $d060				
+				lda #>SCRNPTR
+				sta $d061
+				lda #$00
+				sta $d062
+				sta $d063
+				cli
+
+			
+				// Enable super extended attribute mode
+				lda $d054
+				ora #$05
+				sta $d054
+				
+				// Set the bytes required per row to 80
+				lda #$50
+				sta $d058
+				lda #$00
+				sta $d059
+
+				// Set the characters to display to 40
+				lda #$28
+				sta $d05e
+
+				// Set the screen colours to default
+				lda #$00
+				sta $d020
+				sta $d021
+				sta $d702
+				lda #>dmacoldefault
+				sta $d701
+				lda #<dmacoldefault
+				sta $d700
+				jsr triggerdma					
+
+
+loopstart:		ldx #$00
+loop:			lda #$20
+				sta SCRNPTR,x
+				sta SCRNPTR+$100,x
+				sta SCRNPTR+$200,x
+				sta SCRNPTR+$300,x
+				sta SCRNPTR+$400,x
+				
+				dex
+				lda #$00
+				sta SCRNPTR,x
+				sta SCRNPTR+$100,x
+				sta SCRNPTR+$200,x
+				sta SCRNPTR+$300,x
+				sta SCRNPTR+$400,x
+				dex
+				bne loop	
+				
+				
+				lda #$00
+				sta .row
+				sta .column
+
+				// calculate start locations
+				ldx <SCRNPTR
+				ldy >SCRNPTR
+				stx .linestartscrn
+				sty .linestartscrn + 1
+				ldx .column
+				inx
+				ldy .row
+				iny
+
+
+movecursor:		
+
+xloop:			dex
+				beq nextline
+				inc .linestartscrn
+				bcs overpage
+				
+				jmp xloop
+
+overpage:		clc
+				inc .linestartscrn + 1
+				jmp xloop				
+
+nextline: 		ldx #$28
+				dey
+				bne xloop
+
+
+
+
+
+
+				// Poke string to screen RAM
+printline:		lda #$00
+				tax
+				tay
+printloop:		lda .msg,x
+
+				beq end
+				//cmp #$07
+				//jsr alphacolour
+				
+			 	//sta .linestartscrn,y
+				sta SCRNPTR,y
+				inx
+				iny
+				iny
+				jmp printloop
+
+end:			rts
+				//jmp seamtest
+				//lda #$0a
+				//sta $0800			
+				
+				//DMA list test
+				lda #$03
+				sta .pokeword
+
+				lda #$04
+				sta .destlo
+				lda #$f8
+				sta .desthi
+				lda #$01
+				sta .destbank
+
+				lda #$00
+				sta $d702
+				lda #>dmapoke
+				sta $d701
+
+				lda #<dmapoke
+				sta $d700
+				jsr triggerdma
+
+// ------------------------------------------
+				//SEAM screen byte test
+				// byte 0: 	$80 = inverse video
+				// 			$40 = all graphics symbols, can't tell what it's done
+				//			$20 = numbers intact, letters are other symbols, can't tell what it's done
+				//			$10 = same sort of thing as $20
+				//			$08 = same sort of thing again
+				//			$04 = same again
+				//			$02 = same again
+				//			$01 = same again
+				// byte 1:  $80 = for kerning
+				//			$40 = kerning
+				//			$20 = kerning
+				//			$10 = all black?
+				//			$08 = alternate characters?
+				// 			$04 = background colour = foreground colour?
+				//			$02 = alternate character set?
+				// 			$01 = all black?
+
+seamtest:		ldx #$ff
+seamloop:		lda .linestartscrn,x
+				inc $d020				
+				ora #$00
+				sta .linestartscrn,x
+				dex
+				dex
+				bne seamloop
+
+// ------------------------------------------
+
+
+				rts
+
+triggerdma:		lda #$00
+				sta $d703
+				rts
+
+//---------------------------------------------				
+
+alphacolour:
+				// save colour to dmalist
+				sta .pokeword	
+
+				// length of colour to apply to take us to the end of the line
+				stx cursorpos
+				lda $28
+				sbc cursorpos
+				sta .pokecount
+
+				// work out the colour RAM location to start from	
+				rts
+
+
+
+.curntlinebase:	!word $f800
+cursorpos:		!byte 0
+
+dmacoldefault:	!byte $03		; fill
+				!word 2000		; count
+				!word $01		; value to write
+				!byte $00		; bank (ignored for fill)
+				!word $f800		; destination
+				!byte $01		; bank 1
+				!byte $00		; command hi byte
+				!word $0000		; modulo (ignored for fill)
+
+dmacopy:		!byte $00		; copy
+				!word 2000		; count
+				!word COLPTR	; source base address
+				!byte $00		; source bank 
+				!word $f800		; destination
+				!byte $01		; bank 1
+				!byte $00		; command hi byte
+				!word $0000		; modulo (ignored for fill)
+
+dmapoke:		!byte $03		; fill
+.pokecount		!word 2			; count
+.pokeword:		!word $0001		; value to write
+				!byte $00		; source bank 
+.destlo:		!byte $02		; destination
+.desthi:		!byte $f8
+.destbank:		!byte $01 		; bank 1
+				!byte $00		; command hi byte
+				!word $0000		; modulo (ignored for fill)
+				
+.msg:			!scr "  P100  CEEFAX 100  Thu 18 Jan  12:01/00"
+				!byte 0
+
+.row:			!byte 0
+.column:			!byte 0	
+.linestartscrn:	!word 0
