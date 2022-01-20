@@ -70,7 +70,18 @@ start:
 				sta $d701
 				lda #<dmacoldefault
 				sta $d700
-				jsr triggerdma					
+				jsr triggerdma			
+
+				// Clear screen
+				//lda #$00
+				//sta $d020
+				//sta $d021
+				//sta $d702
+				//lda #>dmacls
+				//sta $d701
+				//lda #<dmacls
+				//sta $d700
+				//jsr triggerdma				
 
 				// Clear screen
 loopstart:		ldx #$00
@@ -80,6 +91,9 @@ loop:			lda #$20
 				sta SCRNPTR+$200,x
 				sta SCRNPTR+$300,x
 				sta SCRNPTR+$400,x
+				sta SCRNPTR+$500,x
+				sta SCRNPTR+$600,x
+				sta SCRNPTR+$700,x
 				
 				dex
 				lda #$00
@@ -88,47 +102,43 @@ loop:			lda #$20
 				sta SCRNPTR+$200,x
 				sta SCRNPTR+$300,x
 				sta SCRNPTR+$400,x
+				sta SCRNPTR+$500,x
+				sta SCRNPTR+$600,x
+				sta SCRNPTR+$700,x
 				dex
 				bne loop	
-
-				// **** SIMPLIFY THIS - WE ONLY NEED TO LOCATE THE START OF THE ROW = SCRNPT + (row * 80)
-				//-----------------------------------------------------				
-
-				lda #$0a
-				asl 
+	
+				//test = insert at this row
+				lda #$18
 				sta .row
-				lda #$00
-				sta .column
 
+				// ensure row -1 > row < 25, if not set row to row 1
+				lda .row
+				sbc #$18
+				bmi validrow
+				lda #$01
+				sta .row
+
+validrow:
 				// find first location on screen RAM to poke to
 				ldx #<SCRNPTR
 				ldy #>SCRNPTR
 				stx .linestartscrn
 				sty .linestartscrn + 1
-				ldx .column
-				inx
-				inx
+
 				ldy .row
-				iny	
+				iny
 
-xloop:			dex
-				dex
-				beq nextline
-				inc .linestartscrn
-				beq carrytohibit
-				inc $0802
-				jmp xloop
-
-carrytohibit:	
-				inc .linestartscrn + 1
-				inc $0800
+rowloop:		dey
+				beq printline				
 				clc
-				jmp xloop				
-
-nextline: 		ldx #82 // each line is 2 bytes per character space, plus 1 because we start at +1 for the dex
-				inc $0804
-				dey
-				bne xloop
+				lda .linestartscrn
+				adc #80
+				sta .linestartscrn
+				bcs nextpage
+				jmp rowloop
+nextpage:		inc .linestartscrn + 1
+				jmp rowloop				
 
 				// -------------------------------------------------------
 
@@ -255,6 +265,15 @@ dmacoldefault:	!byte $03		; fill
 				!byte $00		; command hi byte
 				!word $0000		; modulo (ignored for fill)
 
+dmacls:			!byte $03		; fill
+				!word 2000		; count
+				!word $20		; value to write
+				!byte $00		; bank (ignored for fill)
+				!word SCRNPTR	; destination
+				!byte $00		; bank 1
+				!byte $00		; command hi byte
+				!word $0000		; modulo (ignored for fill)
+
 dmacopy:		!byte $00		; copy
 				!word 2000		; count
 				!word COLPTR	; source base address
@@ -278,5 +297,4 @@ dmapoke:		!byte $03		; fill
 				!byte 0
 
 .row:			!byte 0
-.column:			!byte 0	
 .linestartscrn:	!word 0
