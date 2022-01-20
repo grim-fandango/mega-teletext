@@ -72,7 +72,7 @@ start:
 				sta $d700
 				jsr triggerdma					
 
-
+				// Clear screen
 loopstart:		ldx #$00
 loop:			lda #$20
 				sta SCRNPTR,x
@@ -90,47 +90,56 @@ loop:			lda #$20
 				sta SCRNPTR+$400,x
 				dex
 				bne loop	
-				
-				
-				lda #$00
+
+				// **** SIMPLIFY THIS - WE ONLY NEED TO LOCATE THE START OF THE ROW = SCRNPT + (row * 80)
+				//-----------------------------------------------------				
+
+				lda #$0a
+				asl 
 				sta .row
+				lda #$00
 				sta .column
 
-				// calculate start locations
-				ldx <SCRNPTR
-				ldy >SCRNPTR
+				// find first location on screen RAM to poke to
+				ldx #<SCRNPTR
+				ldy #>SCRNPTR
 				stx .linestartscrn
 				sty .linestartscrn + 1
 				ldx .column
 				inx
+				inx
 				ldy .row
-				iny
-
-
-movecursor:		
+				iny	
 
 xloop:			dex
+				dex
 				beq nextline
 				inc .linestartscrn
-				bcs overpage
-				
+				beq carrytohibit
+				inc $0802
 				jmp xloop
 
-overpage:		clc
+carrytohibit:	
 				inc .linestartscrn + 1
+				inc $0800
+				clc
 				jmp xloop				
 
-nextline: 		ldx #$28
+nextline: 		ldx #82 // each line is 2 bytes per character space, plus 1 because we start at +1 for the dex
+				inc $0804
 				dey
 				bne xloop
 
-
-
-
-
+				// -------------------------------------------------------
 
 				// Poke string to screen RAM
-printline:		lda #$00
+printline:		
+				lda .linestartscrn
+				sta screenpoke + 1
+				lda .linestartscrn + 1
+				sta screenpoke + 2
+
+				lda #$00
 				tax
 				tay
 printloop:		lda .msg,x
@@ -139,14 +148,23 @@ printloop:		lda .msg,x
 				//cmp #$07
 				//jsr alphacolour
 				
-			 	//sta .linestartscrn,y
-				sta SCRNPTR,y
+
+
+screenpoke:	 	sta .linestartscrn,y
+				//sta SCRNPTR,y
 				inx
 				iny
 				iny
 				jmp printloop
 
 end:			rts
+
+				// turn off super extended attribute mode
+				lda $d054
+				and #250
+				sta $d054
+				rts
+
 				//jmp seamtest
 				//lda #$0a
 				//sta $0800			
