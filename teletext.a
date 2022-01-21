@@ -3,7 +3,7 @@
 SCNKEY 	= $ff9f
 GETIN 	= $ff34
 SCRNPTR = $0800
-COLPTR	= $d800
+COLPTR	= $f800
 
 * = $1600
 
@@ -109,7 +109,7 @@ loop:			lda #$20
 				bne loop	
 	
 				//test = insert at this row
-				lda #$18
+				lda #$00
 				sta .row
 
 				// ensure row -1 > row < 25, if not set row to row 1
@@ -153,27 +153,29 @@ printline:
 				tax
 				tay
 printloop:		lda .msg,x
-
 				beq end
-				//cmp #$07
-				//jsr alphacolour
-				
-
+				cmp #$04
+				bne screenpoke
+				jsr alphacolour
 
 screenpoke:	 	sta .linestartscrn,y
-				//sta SCRNPTR,y
 				inx
 				iny
 				iny
 				jmp printloop
 
-end:			rts
+end:			//rts
+
+key:			lda $d4
+				cmp #60
+				bne key
+		
 
 				// turn off super extended attribute mode
 				lda $d054
 				and #250
 				sta $d054
-				rts
+				rts	
 
 				//jmp seamtest
 				//lda #$0a
@@ -219,8 +221,7 @@ end:			rts
 				// 			$01 = all black?
 
 seamtest:		ldx #$ff
-seamloop:		lda .linestartscrn,x
-				inc $d020				
+seamloop:		lda .linestartscrn,x			
 				ora #$00
 				sta .linestartscrn,x
 				dex
@@ -239,19 +240,108 @@ triggerdma:		lda #$00
 //---------------------------------------------				
 
 alphacolour:
-				// save colour to dmalist
-				sta .pokeword	
+				// save colour to dmalist				
+				sta .pokeword
+
+				// save everything to the stack
+				pha
+				txa
+				pha
+				tya
+				pha
 
 				// length of colour to apply to take us to the end of the line
-				stx cursorpos
-				lda $28
-				sbc cursorpos
-				sta .pokecount
+				sty .tempbyte
+				lda #80
+				sbc .tempbyte
+				sta $800
+				tax
+				inx
 
 				// work out the colour RAM location to start from	
+				jsr findcolramposn
+
+				// we are poking 1 byte at a time because we have to poke every other byte
+				lda #$01
+				sta .pokecount
+
+				// loop from the start location, writing to every other byte
+
+colourloop:		lda .linestartcolr
+				sta .destlo
+				lda .linestartcolr + 1
+				sta .desthi
+
+				lda #$01
+				sta .destbank
+
+				lda #$00
+				sta $d702
+				lda #>dmapoke
+				sta $d701
+				lda #<dmapoke
+				sta $d700
+				jsr triggerdma
+
+				dex
+				beq xcolourloop
+				lda .linestartcolr
+				adc #$02
+				sta .linestartcolr
+				bcc colourloop
+				inc .linestartcolr + 1
+				jmp colourloop
+
+xcolourloop:	pla 
+				tay
+				pla
+				tax
+				pla
+
 				rts
 
+findcolramposn:
+				pha
+				txa
+				pha 
+				tya
+				pha
 
+				// find first location on screen RAM to poke to
+				ldx #<COLPTR
+				ldy #>COLPTR
+				stx .linestartcolr
+				sty .linestartcolr + 1
+
+				ldy .row
+				iny
+
+				// add in the start column
+				lda .linestartcolr
+				adc .tempbyte
+				sta .linestartcolr
+
+colrowloop:		dey
+				beq colexit				
+				clc
+				lda .linestartcolr
+				adc #80
+				sta .linestartcolr
+				bcs colnextpage
+				jmp colrowloop
+colnextpage:	inc .linestartcolr + 1
+				jmp colrowloop	
+
+colexit:		pla 
+				tay
+				pla
+				tax
+				pla
+				rts
+
+// --------------------------------------------------------------------------------------
+// DATA
+// --------------------------------------------------------------------------------------
 
 .curntlinebase:	!word $f800
 cursorpos:		!byte 0
@@ -285,7 +375,7 @@ dmacopy:		!byte $00		; copy
 
 dmapoke:		!byte $03		; fill
 .pokecount		!word 2			; count
-.pokeword:		!word $0001		; value to write
+.pokeword:		!word $0004		; value to write
 				!byte $00		; source bank 
 .destlo:		!byte $02		; destination
 .desthi:		!byte $f8
@@ -293,8 +383,12 @@ dmapoke:		!byte $03		; fill
 				!byte $00		; command hi byte
 				!word $0000		; modulo (ignored for fill)
 				
-.msg:			!scr "  P100  CEEFAX 100  Thu 18 Jan  12:01/00"
+.msg:			!scr "  P100  CEEFAX 100  Thu 18 Jan "		
+				!byte $04
+	 			!scr "12:01/00"
 				!byte 0
 
 .row:			!byte 0
 .linestartscrn:	!word 0
+.linestartcolr: !word 0
+.tempbyte		!byte 0
