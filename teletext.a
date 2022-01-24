@@ -152,16 +152,19 @@ printline:
 				lda #$00
 				tax
 				tay
-printloop:		
+printloop:		// convert ASCII to C65 screen codes
 				phy
-				ldy .msg,x
+				ldy .msg,x	
 				lda ttx2scrtable,y
-				ply
-				lda .msg,x
+				ply				
+
+				cmp #$00
 				beq end
-				cmp #$04
-				bne screenpoke
-				jsr alphacolour
+
+				// attribute codes
+				cmp #$07
+				bne screenpoke						
+				jsr alphacolour // accumulator contains colour
 				lda #$20	//attribute space
 
 screenpoke:	 	sta .linestartscrn,y
@@ -394,7 +397,7 @@ dmapoke:		!byte $03		; fill
 				!word $0000		; modulo (ignored for fill)
 				
 .msg:			!raw "  P100  CEEFAX 100  Thu 18 Jan "		
-				!byte $04
+				!byte $03
 	 			!raw "12:01/00"
 				!byte 0
 .msg2:			!byte $43, $45, $45, $46, $41, $58, $20, $20
@@ -414,11 +417,11 @@ dmapoke:		!byte $03		; fill
 ttx2scrtable:	!byte $00
 				!byte $01
 				!byte $02
-				!byte $03
+				!byte $07	// yellow
 				!byte $04
 				!byte $05
 				!byte $06
-				!byte $07
+				!byte $01	// white
 				!byte $08
 				!byte $09
 				!byte $0a
@@ -508,27 +511,27 @@ ttx2scrtable:	!byte $00
 				!byte $5e
 				!byte $5f
 				!byte $60
-				!byte $61
+				!byte $01	// a
 				!byte $62
 				!byte $63
 				!byte $64
 				!byte $65
 				!byte $66
 				!byte $67
-				!byte $68
+				!byte $08	// h
 				!byte $69
 				!byte $6a
 				!byte $6b
 				!byte $6c
-				!byte $6d
-				!byte $6e
+				!byte $0d	// m
+				!byte $0e	// n
 				!byte $6f
 				!byte $70
 				!byte $71
 				!byte $72
 				!byte $73
 				!byte $74
-				!byte $75
+				!byte $15	// u
 				!byte $76
 				!byte $77
 				!byte $78
