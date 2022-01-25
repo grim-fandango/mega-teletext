@@ -153,16 +153,23 @@ printline:
 				tax
 				tay
 printloop:		// convert ASCII to C65 screen codes
+				sta .attribflag
 				phy
 				ldy .msg,x	
-				lda ttx2scrtable,y
+				cpy #$1f
+				bcs notattrib
+				lda #$ff
+				sta .attribflag
+
+notattrib:		lda ttx2scrtable,y
 				ply				
 
 				cmp #$00
 				beq end
 
 				// attribute codes
-				cmp #$07
+				ldz .attribflag
+				cpz #$ff
 				bne screenpoke						
 				jsr alphacolour // accumulator contains colour
 				lda #$20	//attribute space
@@ -397,7 +404,7 @@ dmapoke:		!byte $03		; fill
 				!word $0000		; modulo (ignored for fill)
 				
 .msg:			!raw "  P100  CEEFAX 100  Thu 18 Jan "		
-				!byte $03
+				!byte $06
 	 			!raw "12:01/00"
 				!byte 0
 .msg2:			!byte $43, $45, $45, $46, $41, $58, $20, $20
@@ -409,18 +416,19 @@ dmapoke:		!byte $03		; fill
 .linestartcolr: !word 0
 .tempbyte		!byte 0
 .currentchar	!byte 0
+.attribflag		!byte 0
 
 // -------------------------------------
 // TTX to SCR look-up table
 // -------------------------------------
 
 ttx2scrtable:	!byte $00
-				!byte $01
-				!byte $02
+				!byte $02	// red
+				!byte $05	// green
 				!byte $07	// yellow
-				!byte $04
-				!byte $05
-				!byte $06
+				!byte $06	// blue
+				!byte $04	// magenta
+				!byte $03	// cyan
 				!byte $01	// white
 				!byte $08
 				!byte $09
