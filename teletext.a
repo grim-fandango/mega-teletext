@@ -164,7 +164,7 @@ printloop:		// convert ASCII to C65 screen codes
 notattrib:		lda ttx2scrtable,y
 				ply				
 
-				cmp #$00
+				cmp #$ff
 				beq end
 
 				// attribute codes
@@ -180,7 +180,7 @@ screenpoke:	 	sta .linestartscrn,y
 				iny
 				jmp printloop
 
-end:			//rts
+end:			
 
 key:			lda $d4
 				cmp #60
@@ -270,7 +270,6 @@ alphacolour:
 				sty .tempbyte
 				lda #80
 				sbc .tempbyte
-				sta $800
 				tax
 				inx
 
@@ -403,12 +402,12 @@ dmapoke:		!byte $03		; fill
 				!byte $00		; command hi byte
 				!word $0000		; modulo (ignored for fill)
 				
-.msg:			!raw "  P100  CEEFAX 100  Thu 18 Jan ",6,"12:01/00",0
-				!raw 1,"Red",0
-				
+.msg:			!raw "  P100  CEEFAX 100  Thu 18 Jan ", 3, "12:01/00", $ff
+				!raw 1, "Red", 2, "Green", 3, "Yellow", 4, "Blue", $ff
+
 .msg2:			!byte $43, $45, $45, $46, $41, $58, $20, $20
 				!raw "P"
-				!byte 0
+				!byte $ff
 
 .row:			!byte 0
 .linestartscrn:	!word 0
