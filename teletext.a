@@ -676,3 +676,4 @@ ttx2scrtable:	!byte $00
 				!byte $fd
 				!byte $fe
 				!byte $ff
+pagedata:		!binary "C:\\Users\\jasonrob\\OneDrive\\Documents\\Teletext\\bbc1_1975-08-30_vhs-dub_stradling\\binaries\\100.bin"
