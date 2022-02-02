@@ -4,8 +4,13 @@ SCNKEY 	= $ff9f
 GETIN 	= $ff34
 SCRNPTR = $0800
 COLPTR	= $f800
+ROWPTR = $fb
 
-* = $1600
+* = $2000
+
+basicstub:		!byte $00,$0a,$20,$0a,$00,$fe,$02,$20
+				!byte $30,$00,$16,$20,$14,$00,$9e,$20
+				!byte $24,$32,$30,$31,$38,$00,$00,$00
 
 start:      	
 				// Lower case mode
@@ -107,30 +112,84 @@ loop:			lda #$20
 				sta SCRNPTR+$700,x
 				dex
 				bne loop	
+
+				//intialise zeropage storage
+				lda #<pagedata
+				sta ROWPTR
+				lda #>pagedata
+				sta ROWPTR + 1
 	
-				//test = insert at this row
+readrow:		//read magazine number from MRAG
+				// this is a fudge for now and only works with magazine 1
+				ldy #$02 // for some reason there is a two-byte header when a binary file is included
+				lda (ROWPTR),y
+				and #$40
+				rol
+				rol
+				sta .magazine
+
+				// read row number from MRAG
 				lda #$00
 				sta .row
-
-				// ensure row -1 > row < 25, if not set row to row 1
-				lda .row
-				sbc #$18
-				bmi validrow
+rowbit0:		lda (ROWPTR),y
+				sta $802
+				and #$40
+				beq rowbit1
+				inc $d020
 				lda #$01
 				sta .row
+rowbit1:		iny
+				lda (ROWPTR),y
+				and #$02
+				beq rowbit2
+				lda .row
+				adc #$02
+				sta .row
+rowbit2:		lda (ROWPTR),y
+				and #$08
+				beq rowbit3
+				lda .row
+				adc #$04
+				sta .row
+rowbit3:		lda (ROWPTR),y
+				and #$20
+				beq rowbit4
+				lda .row 
+				adc #$08
+				sta .row
+rowbit4:		lda (ROWPTR),y
+				and #$40
+				beq gotrow
+				lda .row
+				adc #$10
+				sta .row
 
-validrow:
+gotrow:			inc $d020
+				//sta $0800
+				//lda .row
+				//sta $0804
+				//jmp end
+
+
+validrow:		// ensure row -1 > row < 25, if not set row to row 1
+				//lda .row
+				//sbc #$18
+				//bmi validrow
+				//lda #$01
+				//sta .row
+
+
 				// find first location on screen RAM to poke to
 				ldx #<SCRNPTR
 				ldy #>SCRNPTR
 				stx .linestartscrn
 				sty .linestartscrn + 1
 
-				ldy .row
-				iny
+				//lda .row
+				//sta $0804
 
-rowloop:		dey
-				beq printline				
+rowloop:		cmp #$00
+				beq printline			
 				clc
 				lda .linestartscrn
 				adc #80
@@ -150,33 +209,45 @@ printline:
 				sta screenpoke + 2
 
 				lda #$00
-				tax
-				tay
+				ldx #$02
+				ldy #$04
+
+				// if header row, start printing at column 8
+				lda .row
+				cmp #$00
+				bne printloop
+				ldy #$0a // column 8 + 2 because of the weird two byte header when including a binary file
+				ldx #$10 // start printing on screen at $10/2 = position 8 (divide by 2 because of SEAM)
+					
 printloop:		// convert ASCII to C65 screen codes
+				lda #$00
 				sta .attribflag
-				phy
-				ldy .msg,x	
-				cpy #$1f
+				
+				lda (ROWPTR),y
+				and #$7f	
+				cmp #$1f
 				bcs notattrib
-				lda #$ff
-				sta .attribflag
+				ldz #$ff
+				stz .attribflag
 
-notattrib:		lda ttx2scrtable,y
-				ply				
-
-				cmp #$ff
+notattrib:		phy
+				tay
+				lda ttx2scrtable,y
+							
+				ply
+				cpy #42
 				beq end
 
 				// attribute codes
 				ldz .attribflag
 				cpz #$ff
 				bne screenpoke						
-				jsr alphacolour // accumulator contains colour
+				//jsr alphacolour // accumulator contains colour
 				lda #$20	//attribute space
 
-screenpoke:	 	sta .linestartscrn,y
+screenpoke:	 	sta .linestartscrn,x
 				inx
-				iny
+				inx
 				iny
 				jmp printloop
 
@@ -402,14 +473,13 @@ dmapoke:		!byte $03		; fill
 				!byte $00		; command hi byte
 				!word $0000		; modulo (ignored for fill)
 				
-.msg:			!raw "  P100  CEEFAX 100  Thu 18 Jan ", 3, "12:01/00", $ff
-				!raw 1, "Red", 2, "Green", 3, "Yellow", 4, "Blue", $ff
+//.msg:			!raw "  P100  CEEFAX 100  Thu 18 Jan ", 3, "12:01/00", $ff
+//				!raw 1, "Red", 2, "Green", 3, "Yellow", 4, "Blue", $ff
+//
+//.msg2:			!byte $43, $45, $45, $46, $41, $58, $20, $20
+//				!raw "P"
+//				!byte $ff
 
-.msg2:			!byte $43, $45, $45, $46, $41, $58, $20, $20
-				!raw "P"
-				!byte $ff
-
-.row:			!byte 0
 .linestartscrn:	!word 0
 .linestartcolr: !word 0
 .tempbyte		!byte 0
@@ -676,4 +746,10 @@ ttx2scrtable:	!byte $00
 				!byte $fd
 				!byte $fe
 				!byte $ff
-pagedata:		!binary "C:\\Users\\jasonrob\\OneDrive\\Documents\\Teletext\\bbc1_1975-08-30_vhs-dub_stradling\\binaries\\100.bin"
+rowaddress		!word pagedata
+.magazine		!byte $01
+.page			!byte $00
+.row			!byte $00
+//pagedata:		!binary "C:\\Users\\jasonrob\\OneDrive\\Documents\\Teletext\\bbc1_1975-08-30_vhs-dub_stradling\\binaries\\100.bin"
+//pagedata:		!binary "C:\\Users\\jasonrob\\OneDrive\\Documents\\Teletext\\bbc2_1979-04-12_beta_100percent\\binaries\\201.bin"
+pagedata:		!binary "C:\\Users\\jkrob\\OneDrive\\Documents\\Teletext\\bbc2_1979-04-12_beta_100percent\\binaries\\201.bin"
